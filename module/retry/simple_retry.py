@@ -1,9 +1,12 @@
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # 自定义重试装饰器，带有超时控制
-def retry_with_timeout(max_attempts, delay, timeout_seconds):
+def retry_with_timeout(max_attempts, delay, timeout_seconds, fail_callback=None):
     def decorator(func):
         def wrapper(*args, **kwargs):
             attempt = 0
@@ -14,20 +17,23 @@ def retry_with_timeout(max_attempts, delay, timeout_seconds):
                         result = future.result(timeout=timeout_seconds)
                         return result
                     except TimeoutError:
-                        print(f"Attempt {attempt + 1} timed out: Operation took longer than {timeout_seconds} seconds")
+                        logger.warning(f"Attempt {attempt + 1} timed out")
                     except Exception as e:
-                        print(f"Attempt {attempt + 1} failed: {e}")
+                        logger.warning(f"Attempt {attempt + 1} failed: {e}")
                     finally:
                         attempt += 1
                         if attempt < max_attempts:
                             time.sleep(delay)
                         else:
-                            raise Exception(f"Operation failed after {max_attempts} attempts")
+                            if fail_callback:
+                                fail_callback()
+                            else:
+                                logger.error(f"Operation failed after {max_attempts} attempts")
+                                raise Exception(f"Operation failed after {max_attempts} attempts")
 
         return wrapper
 
     return decorator
-
 
 
 @retry_with_timeout(max_attempts=3, delay=2, timeout_seconds=5)
