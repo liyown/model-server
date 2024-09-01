@@ -55,20 +55,17 @@ class FaceRecognitionService:
                 face_failure_queue.put(task)
 
     def stop(self):
-        # 设置停止事件
-        self.stop_event.set()
-
         # 等待所有线程完成
-        for thread in self.ThreadPool:
-            thread.join()
+        for thd in self.ThreadPool:
+            thd.join()
         logger.info("所有线程已停止")
 
 
 def get_result(task_id):
     return face_result_cache.get(task_id)
 
-face_service = FaceRecognitionService(2)
 
+face_service = FaceRecognitionService(2)
 
 if __name__ == "__main__":
     face_service = FaceRecognitionService(2)
