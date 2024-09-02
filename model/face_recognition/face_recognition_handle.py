@@ -8,6 +8,11 @@ from PIL import Image
 import torchvision.transforms as transforms
 import torch
 from torchvision.models.resnet import ResNet18_Weights
+from pydantic import BaseModel
+
+
+class FaceRecognitionCTX(BaseModel):
+    image_path: str
 
 
 class FaceRecognitionHandle(BaseHandle):
@@ -25,35 +30,39 @@ class FaceRecognitionHandle(BaseHandle):
         self.model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
         self.model.eval()
 
-    def preprocess(self, ctx):
+    def preprocess(self, raw_data):
         """
         预处理输入数据
         """
         # 获取图片路径
-        image_path = ctx.get("image_path")
+        image_path = raw_data.image_path
         # 读取图片为tensor
         image = self.read_image(image_path)
-        ctx["image"] = image
-        return ctx
+        return image
 
-    def inference(self, ctx):
+    def inference(self, input_data):
         """
         执行推理
         """
-        image = ctx.get("image")
         with torch.no_grad():
-            output = self.model(image)
-        ctx["output"] = output
-        return ctx
+            output_data = self.model(input_data)
+        return output_data
 
-    def postprocess(self, ctx):
+    def postprocess(self, output_data):
         """
         后处理输出数据,处理为可以返回的格式
         """
-        output = ctx.get("output")
         # 获取预测结果，imageNet1000K分类
-        _, predicted = torch.max(output, 1)
+        _, predicted = torch.max(output_data, 1)
         return predicted.item()
+
+    def handle(self, ctx: FaceRecognitionCTX):
+        """
+        处理数据
+        """
+        image = self.preprocess(ctx)
+        output = self.inference(image)
+        return self.postprocess(output)
 
 
     def read_image(self, image_path):
@@ -74,8 +83,5 @@ class FaceRecognitionHandle(BaseHandle):
 if __name__ == "__main__":
     face_handle = FaceRecognitionHandle()
     face_handle.initialize()
-    ctx = {"image_path": "data/dog.png"}
-    ctx = face_handle.preprocess(ctx)
-    ctx = face_handle.inference(ctx)
-    output = face_handle.postprocess(ctx)
+    output = face_handle.handle(FaceRecognitionCTX(image_path="data/dog.png"))
     print(output)
