@@ -27,23 +27,30 @@ class BaseHandle(ABC):
         pass
 
     @abstractmethod
-    def preprocess(self, ctx: Dict):
+    def preprocess(self, ctx):
         """
         Preprocess the input data
         """
         pass
 
     @abstractmethod
-    def inference(self, ctx: Dict):
+    def inference(self, ctx):
         """
         Perform inference on the data
         """
         pass
 
     @abstractmethod
-    def postprocess(self, ctx: Dict):
+    def postprocess(self, ctx):
         """
         Postprocess the output data
+        """
+        pass
+
+    @abstractmethod
+    def handle(self, ctx):
+        """
+        Handle the data
         """
         pass
 
