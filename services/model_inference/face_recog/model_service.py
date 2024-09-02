@@ -1,18 +1,19 @@
 from queue import Queue
 from threading import Thread
 import logging
-from concurrent.futures import ThreadPoolExecutor, TimeoutError
-from model.face_recognition.face_recognition_handle import FaceRecognitionHandle
+from typing import Dict
+
+from model.face_recognition.face_recognition_handle import FaceRecognitionHandle, FaceRecognitionCTX
+from module.ORM.model import ImageToVideoTaskModel, ImageToVideoResultModel
 from module.retry.simple_retry import retry_with_timeout
+from module.task_queue.persistence_queue import ImageToVideoTaskTaskQueue
+
+
 
 logger = logging.getLogger(__name__)
 
 # 任务队列
-face_task_queue = Queue(100)
-# 任务结果缓存
-face_result_cache = {}
-# 失败任务队列
-face_failure_queue = Queue(100)
+face_task_queue = ImageToVideoTaskTaskQueue(100)
 
 
 def callback():
@@ -35,24 +36,25 @@ class FaceRecognitionService:
         logger.info("人脸识别服务启动成功")
 
     @retry_with_timeout(max_attempts=3, delay=2, timeout_seconds=5, fail_callback=callback)
-    def process_task(self, task):
+    def process_task(self, task: Dict):
         logger.info(f"开始处理任务 {task.get('task_id')}")
         task_id = task.get("task_id")
-        ctx = task.get("ctx")
-        self.face_handle.preprocess(ctx)
-        self.face_handle.inference(ctx)
-        result = self.face_handle.postprocess(ctx)
-        face_result_cache[task_id] = result
+        ctx = task.get("image_url")
+        result = self.face_handle.handle(FaceRecognitionCTX(image_path=ctx))
         logger.info(f"任务 {task_id} 处理完成")
+        return result
 
     def run(self):
         while True:
-            task = face_task_queue.get()
+            task = face_task_queue.get_task()
             try:
                 self.process_task(task)
+                face_task_queue.mark_task_as_done(task.get('task_id'), ImageToVideoResultModel.parse_obj({
+                    "video_url": "http://example.com/video.mp4"
+                }))
             except Exception as e:
                 logger.error(f"任务 {task.get('task_id')} 处理失败: {e}")
-                face_failure_queue.put(task)
+                face_task_queue.mark_task_as_failed(task.get('task_id'))
 
     def stop(self):
         # 等待所有线程完成
@@ -61,27 +63,23 @@ class FaceRecognitionService:
         logger.info("所有线程已停止")
 
 
-def get_result(task_id):
-    return face_result_cache.get(task_id)
-
-
 face_service = FaceRecognitionService(2)
 
 if __name__ == "__main__":
-    face_service = FaceRecognitionService(2)
+    logging.basicConfig(level=logging.DEBUG)
+
+    face_service = FaceRecognitionService(1)
     face_service.start()
-    for i in range(10):
-        face_task_queue.put({"task_id": i, "ctx": {"image_path": "data/dog.png"}})
-
-    # 等待10s
-    import time
-
-    time.sleep(10)
 
     for i in range(10):
-        print(get_result(i))
-    print("任务处理完成")
+        face_task_queue.add_task(ImageToVideoTaskModel.parse_obj({
+            "image_url": "data/dog.png",
+            "audio_url": "http://example.com/audio.mp3",
+            "status": 0
+        }))
 
     # 守护线程
     for thread in face_service.ThreadPool:
         thread.join()
+
+
