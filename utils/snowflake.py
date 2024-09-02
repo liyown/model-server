@@ -26,7 +26,7 @@ class Snowflake:
             timestamp = self._get_timestamp()
         return timestamp
 
-    def generate(self):
+    def generate(self) -> object:
         with self.lock:
             timestamp = self._get_timestamp()
             if timestamp < self.last_timestamp:
@@ -40,3 +40,11 @@ class Snowflake:
                 self.sequence = 0
             self.last_timestamp = timestamp
             return ((timestamp - 1420070400000) << 22) | (self.datacenter_id << 17) | (self.worker_id << 12) | self.sequence
+
+
+
+if __name__ == '__main__':
+    snowflake = Snowflake(1, 1)
+    for i in range(10):
+
+        print(snowflake.generate())

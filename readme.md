@@ -2,6 +2,8 @@
 
 ### 服务框架
 
+![](https://raw.githubusercontent.com/liyown/pic-go/master/blog/202409020952914.png)
+
 #### 服务框架采用FastAPI
 ![](https://raw.githubusercontent.com/liyown/pic-go/master/blog/202409011832208.png)
 
