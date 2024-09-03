@@ -1,3 +1,5 @@
 /.venv/
 .idea
 /pytorch
+/module/OSS/data/monalisa.wav
+/module/OSS/data/test_1.jpg
