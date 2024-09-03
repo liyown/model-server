@@ -1,18 +1,18 @@
-import logging
 from pathlib import Path
-from fastapi import APIRouter
-from jose import jwt
-from pydantic import BaseModel
-from starlette.responses import HTMLResponse, FileResponse, JSONResponse
-import os
-from module.JWT.jwt import create_access_token
-from fastapi import HTTPException
 import logging
+import os
+from pathlib import Path
+
+import GPUtil
 from fastapi import HTTPException, Depends, Request, APIRouter
 from jose import jwt, JWTError
+from pydantic import BaseModel
+from pynvml import nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo
+from starlette.responses import HTMLResponse, FileResponse, JSONResponse
 
+from module.JWT.jwt import create_access_token
 from module.JWT.resource_access_token import create_unique_resource_token
-from module.ORM.table_config import Authorizations
+from module.ORM.table_config import Authorizations, ImageToVideoTask
 from module.config.env_config import config
 
 router = APIRouter()
@@ -56,7 +56,7 @@ async def index(login_request: LoginRequest):
     # 验证用户名和密码
     if login_request.username == config.get("admin") and login_request.password == config.get("password"):
         token = create_access_token({"sub": login_request.username})
-        response = JSONResponse(content={"userName": "admin", "role": "admin"})
+        response = JSONResponse(content={"userName": "admin", "role": "ADMIN"})
         response.headers["Authorization"] = token
         return response
     else:
@@ -101,7 +101,7 @@ async def tokens(payload: dict = Depends(verify_token_in_cookie)):
         raise HTTPException(status_code=401, detail="Invalid token")
     tokens = Authorizations.select()
     return {"code": 200, "message": "Success",
-            "data": [{"api_key": token.api_key, "remark": token.remark, "key":token.id} for token in tokens]}
+            "data": [{"api_key": token.api_key, "remark": token.remark, "key": token.id} for token in tokens]}
 
 
 @router.delete("/token/{api_key}")
@@ -113,8 +113,38 @@ async def delete_token(api_key: str, payload: dict = Depends(verify_token_in_coo
     return {"code": 200, "message": "Token deleted successfully"}
 
 
-if __name__ == '__main__':
-    SECRET_KEY = config.get("login_secret_key")
-    ALGORITHM = "HS256"
-    token = create_access_token({"sub": "admin"})
-    data = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+# 查看当前未完成的任务数
+@router.get("/task_count")
+async def task_count(payload: dict = Depends(verify_token_in_cookie)):
+    if payload.get("sub") != config.get("admin"):
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    task_counts = ImageToVideoTask.select().where(
+        (ImageToVideoTask.status == 0) | (ImageToVideoTask.status == 1)
+    ).count()
+
+    return {"code": 200, "message": "Success", "data": {"task_count": task_counts}}
+
+
+@router.get("/gpu_status")
+async def get_gpu_status():
+    gpus = GPUtil.getGPUs()
+    gpu_status = []
+
+    for gpu in gpus:
+        handle = nvmlDeviceGetHandleByIndex(gpu.id)
+        mem_info = nvmlDeviceGetMemoryInfo(handle)
+
+        gpu_info = {
+            "id": gpu.id,
+            "name": gpu.name,
+            "load": gpu.load * 100,  # GPU使用率
+            "memory_total": mem_info.total / (1024 ** 2),  # 总内存(MB)
+            "memory_used": mem_info.used / (1024 ** 2),  # 已使用内存(MB)
+            "memory_free": mem_info.free / (1024 ** 2),  # 可用内存(MB)
+            "temperature": gpu.temperature,  # GPU温度
+            "uuid": gpu.uuid
+        }
+        gpu_status.append(gpu_info)
+
+    return {"gpu_status": gpu_status}
