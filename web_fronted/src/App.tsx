@@ -4,7 +4,6 @@ import GlobalContext from "./context";
 import { useEffect, useState } from "react";
 import { Permission } from "@/component/PermissionWrapper";
 import Loading from "@/component/Loading";
-import jwt from "jsonwebtoken";
 
 export interface UserInfo {
   userName: string;

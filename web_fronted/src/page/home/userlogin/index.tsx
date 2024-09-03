@@ -21,7 +21,7 @@ export function Component() {
         instant.post("/login", v).then((res) => {
           if (res.status === 200) {
             console.log("Login successfully:", res.data);
-            globalContext.setUserInfo(v);
+            globalContext.setUserInfo(res.data);
             navigate("/");
           }
         }).catch((error) => {

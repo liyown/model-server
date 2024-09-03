@@ -40,8 +40,14 @@ export const routes: Route[] = [
       {
         id: "APIToken管理",
         title: "APIToken管理",
-        path: "/monitor",
+        path: "/token_manager",
         lazy: () => import("../page/home/token_manager"),
+      },
+      {
+        id: "系统监控",
+        title: "系统监控",
+        path: "/monitor",
+        lazy: () => import("../page/home/monitor"),
       },
       {
         id: "login",
