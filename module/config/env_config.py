@@ -15,6 +15,17 @@ class Config:
         # 优先从 .env 文件中获取变量，如果没有找到则从系统环境变量中获取
         return os.getenv(key, default)
 
+    def get_logging_level(self):
+        level = self.get("logging_level", "INFO")
+        switcher = {
+            "DEBUG": 10,
+            "INFO": 20,
+            "WARNING": 30,
+            "ERROR": 40,
+            "CRITICAL": 50
+        }
+        return switcher.get(level, 20)
+
 
 config = Config()
 

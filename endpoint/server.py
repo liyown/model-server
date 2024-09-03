@@ -1,14 +1,16 @@
 import logging
 from fastapi import FastAPI
+from pynvml import nvmlInit, nvmlShutdown
 from starlette.middleware.cors import CORSMiddleware
 
 from endpoint.face_controller import router as face_detection_router
 from endpoint.middle_ground_controller import router as middle_ground_router
 import uvicorn
 
+from module.config.env_config import config
 from services.model_inference.face_recog.model_service import FaceRecognitionService, face_service
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=config.get_logging_level(), format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 app = FastAPI()
 
@@ -24,10 +26,12 @@ app.add_middleware(
 
 def service_start():
     face_service.start()
+    nvmlInit()
 
 
 def service_stop():
     face_service.stop()
+    nvmlShutdown()
 
 
 app.include_router(face_detection_router, prefix="/api/v1")

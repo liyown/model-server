@@ -29,28 +29,28 @@ class BaseHandle(ABC):
     @abstractmethod
     def preprocess(self, ctx):
         """
-        Preprocess the input data
+        Preprocess the input template_data
         """
         pass
 
     @abstractmethod
     def inference(self, ctx):
         """
-        Perform inference on the data
+        Perform inference on the template_data
         """
         pass
 
     @abstractmethod
     def postprocess(self, ctx):
         """
-        Postprocess the output data
+        Postprocess the output template_data
         """
         pass
 
     @abstractmethod
     def handle(self, ctx):
         """
-        Handle the data
+        Handle the template_data
         """
         pass
 

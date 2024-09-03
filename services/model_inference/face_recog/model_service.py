@@ -3,8 +3,9 @@ from threading import Thread
 import logging
 from typing import Dict
 
-from model.face_recognition.face_recognition_handle import FaceRecognitionHandle, FaceRecognitionCTX
+from model.face_recognition.face_recognition_handle import FaceRecognitionHandle
 from module.ORM.model import ImageToVideoTaskModel, ImageToVideoResultModel
+from module.OSS.image_operation import OSSImageService
 from module.retry.simple_retry import retry_with_timeout
 from module.task_queue.persistence_queue import ImageToVideoTaskTaskQueue
 
@@ -23,6 +24,7 @@ class FaceRecognitionService:
         self.face_handle = FaceRecognitionHandle()
         self.face_handle.initialize()
         self.ThreadPool = []
+        self.OSSImageService = OSSImageService()
         for i in range(work_num):
             self.ThreadPool.append(Thread(target=self.run, daemon=True))
         logger.info(f"初始化人脸识别服务，工作线程数：{work_num}")
@@ -35,11 +37,12 @@ class FaceRecognitionService:
 
     @retry_with_timeout(max_attempts=3, delay=2, timeout_seconds=5, fail_callback=callback)
     def process_task(self, task: Dict):
-        logger.info(f"开始处理任务 {task.get('task_id')}")
+        logger.debug(f"开始处理任务 {task.get('task_id')}")
         task_id = task.get("task_id")
-        ctx = task.get("image_url")
-        result = self.face_handle.handle(FaceRecognitionCTX(image_path=ctx))
-        logger.info(f"任务 {task_id} 处理完成")
+        ctx = self.OSSImageService.download_image_to_image(task.get("image_key"))
+        logger.debug(f"任务 {task_id} 图片下载完成")
+        result = self.face_handle.handle(ctx)
+        logger.debug(f"任务 {task_id} 处理完成")
         return result
 
     def run(self):
@@ -48,7 +51,7 @@ class FaceRecognitionService:
             try:
                 self.process_task(task)
                 face_task_queue.mark_task_as_done(task.get('task_id'), ImageToVideoResultModel.parse_obj({
-                    "video_url": "http://example.com/video.mp4"
+                    "video_key": "http://example.com/video.mp4"
                 }))
             except Exception as e:
                 logger.error(f"任务 {task.get('task_id')} 处理失败: {e}")
@@ -69,7 +72,7 @@ if __name__ == "__main__":
 
     for i in range(10):
         face_task_queue.add_task(ImageToVideoTaskModel.parse_obj({
-            "image_url": "data/dog.png",
+            "image_key": "image/2024/09/dog.png",
             "audio_url": "http://example.com/audio.mp3",
             "status": 0
         }))

@@ -10,11 +10,6 @@ import torch
 from torchvision.models.resnet import ResNet18_Weights
 from pydantic import BaseModel
 
-
-class FaceRecognitionCTX(BaseModel):
-    image_path: str
-
-
 class FaceRecognitionHandle(BaseHandle):
     """
     人脸识别处理类
@@ -30,14 +25,12 @@ class FaceRecognitionHandle(BaseHandle):
         self.model = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
         self.model.eval()
 
-    def preprocess(self, raw_data):
+    def preprocess(self, raw_data: Image):
         """
         预处理输入数据
         """
-        # 获取图片路径
-        image_path = raw_data.image_path
         # 读取图片为tensor
-        image = self.read_image(image_path)
+        image = self.read_image(raw_data)
         return image
 
     def inference(self, input_data):
@@ -56,7 +49,7 @@ class FaceRecognitionHandle(BaseHandle):
         _, predicted = torch.max(output_data, 1)
         return predicted.item()
 
-    def handle(self, ctx: FaceRecognitionCTX):
+    def handle(self, ctx: Image):
         """
         处理数据
         """
@@ -64,12 +57,10 @@ class FaceRecognitionHandle(BaseHandle):
         output = self.inference(image)
         return self.postprocess(output)
 
-
-    def read_image(self, image_path):
+    def read_image(self, image: Image):
         """
         读取图片为tensor
         """
-        image = Image.open(image_path)
         transform = transforms.Compose([
             transforms.Resize(256),
             transforms.CenterCrop(224),
@@ -80,8 +71,3 @@ class FaceRecognitionHandle(BaseHandle):
         return image
 
 
-if __name__ == "__main__":
-    face_handle = FaceRecognitionHandle()
-    face_handle.initialize()
-    output = face_handle.handle(FaceRecognitionCTX(image_path="data/dog.png"))
-    print(output)
