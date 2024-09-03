@@ -1,4 +1,5 @@
-from peewee import Model, CharField, DateTimeField, IntegerField, TextField, MySQLDatabase, SQL, BigIntegerField
+from peewee import Model, CharField, DateTimeField, IntegerField, TextField, MySQLDatabase, SQL, BigIntegerField, \
+    AutoField
 from datetime import datetime
 
 from module.ORM.mysql_config import db
@@ -40,8 +41,9 @@ class ImageToVideoResult(Model):
 
 
 class Authorizations(Model):
-    id = BigIntegerField(unique=True, primary_key=True)
+    id = AutoField()
     api_key = CharField(max_length=255)
+    remark = TextField(null=True)
     created_at = DateTimeField(default=datetime.now)
     updated_at = DateTimeField(default=datetime.now, constraints=[SQL('ON UPDATE CURRENT_TIMESTAMP')])
 

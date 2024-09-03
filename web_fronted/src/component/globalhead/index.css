@@ -1,0 +1,5 @@
+.arco-menu-horizontal .arco-menu-inner {
+    display: flex;
+    align-items: center;
+    padding: 0
+}

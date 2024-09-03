@@ -8,8 +8,6 @@ from module.ORM.model import ImageToVideoTaskModel, ImageToVideoResultModel
 from module.retry.simple_retry import retry_with_timeout
 from module.task_queue.persistence_queue import ImageToVideoTaskTaskQueue
 
-
-
 logger = logging.getLogger(__name__)
 
 # 任务队列
@@ -58,8 +56,6 @@ class FaceRecognitionService:
 
     def stop(self):
         # 等待所有线程完成
-        for thd in self.ThreadPool:
-            thd.join()
         logger.info("所有线程已停止")
 
 
@@ -81,5 +77,3 @@ if __name__ == "__main__":
     # 守护线程
     for thread in face_service.ThreadPool:
         thread.join()
-
-

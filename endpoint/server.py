@@ -1,7 +1,9 @@
 import logging
 from fastapi import FastAPI
-from endpoint import face_controller
+from starlette.middleware.cors import CORSMiddleware
+
 from endpoint.face_controller import router as face_detection_router
+from endpoint.middle_ground_controller import router as middle_ground_router
 import uvicorn
 
 from services.model_inference.face_recog.model_service import FaceRecognitionService, face_service
@@ -10,20 +12,29 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 
 app = FastAPI()
 
-app.include_router(face_detection_router, prefix="/api/v1")
+# 设置 CORS 策略
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],  # 允许所有域名访问
+    allow_credentials=True,
+    allow_methods=["*"],  # 允许所有 HTTP 方法
+    allow_headers=["*"],  # 允许所有请求头
+    expose_headers=["Authorization"]
+)
 
-
-def face_service_start():
+def service_start():
     face_service.start()
 
 
-def face_service_stop():
+def service_stop():
     face_service.stop()
 
 
-app.include_router(face_controller.router, prefix="/api/v1")
-app.add_event_handler("startup", face_service_start)
-app.add_event_handler("shutdown", face_service_stop)
+app.include_router(face_detection_router, prefix="/api/v1")
+app.include_router(middle_ground_router, prefix="/admin")
+
+app.add_event_handler("startup", service_start)
+app.add_event_handler("shutdown", service_stop)
 
 # if __name__ == "__main__":
 #     uvicorn.run(app, host="127.0.0.1", port=8080)
