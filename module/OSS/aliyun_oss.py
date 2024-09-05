@@ -58,6 +58,13 @@ class OSSBase:
         self.bucket.get_object_to_file(key, local_file_path)
         return local_file_path
 
+    def download_file_to_bytes(self, key):
+        """下载文件
+        :param key: 文件在 OSS 上的 key
+        """
+        result = self.bucket.get_object(key)
+        return result.read()
+
 
 if __name__ == '__main__':
     # 上传文件

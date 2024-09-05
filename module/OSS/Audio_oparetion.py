@@ -34,7 +34,7 @@ class OSSAudioService(OSSBase):
         self.bucket.get_object_to_file(key, local_file_path)
         return local_file_path
 
-    def download_audio_to_bytesIO(self, key) -> BytesIO:
+    def download_audio_to_bytes(self, key) -> bytes:
         """下载音频
         :param key: 音频在 OSS 上的 key
         """
