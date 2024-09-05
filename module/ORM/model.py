@@ -16,4 +16,15 @@ class ImageToVideoResultModel(BaseModel):
     video_key: str
 
 
+class VideoAndAudioToVideoTaskModel(BaseModel):
+    task_id: Optional[int] = None
+    video_key: str
+    audio_key: str
+    result_id: Optional[int] = None
+    status: int
 
+
+class VideoAndAudioToVideoResultModel(BaseModel):
+    result_id: Optional[int] = None
+    video_key: str
+    failed_reason: Optional[str] = None

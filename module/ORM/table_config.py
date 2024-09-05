@@ -40,6 +40,42 @@ class ImageToVideoResult(Model):
         table_name = 'image_to_video_result'  # 表名
 
 
+class VideoAndAudioToVideoTask(Model):
+    task_id = BigIntegerField(unique=True, primary_key=True)  # 任务ID
+    # 可变字符串字段，最大长度为255
+    video_key = CharField(max_length=255)  # 图片链接
+    audio_key = CharField(max_length=255)  # 音频链接
+    result_id = BigIntegerField(null=True)  # 生成视频结果ID
+    created_at = DateTimeField(default=datetime.now)  # 创建时间
+    updated_at = DateTimeField(default=datetime.now, constraints=[SQL('ON UPDATE CURRENT_TIMESTAMP')])  # 更新时间
+    status = IntegerField(default=0)  # 状态 (0: 排队中, 1: 处理中, 2: 处理完成, 3: 处理失败)
+
+    def save(self, *args, **kwargs):
+        self.updated_at = datetime.now()
+        return super().save(*args, **kwargs)
+
+    class Meta:
+        database = db  # 使用之前定义的数据库连接
+        table_name = 'video_with_audio_to_video_task'  # 表名
+
+
+class VideoAndAudioToVideoResult(Model):
+    result_id = BigIntegerField(unique=True, primary_key=True)  # 结果ID
+    video_key = CharField(max_length=255)  # 视频链接
+    failed_reason = TextField(null=True)  # 失败原因
+    created_at = DateTimeField(default=datetime.now)  # 创建时间
+    updated_at = DateTimeField(default=datetime.now, constraints=[SQL('ON UPDATE CURRENT_TIMESTAMP')])  # 更新时间
+
+    def save(self, *args, **kwargs):
+        self.updated_at = datetime.now()
+        return super().save(*args, **kwargs)
+
+    class Meta:
+        database = db  # 使用之前定义的数据库连接
+        table_name = 'video_with_audio_to_video_result'  # 表名
+
+
+
 class Authorizations(Model):
     id = AutoField()
     api_key = CharField(max_length=255)
@@ -69,3 +105,9 @@ if not ImageToVideoResult.table_exists():
 
 if not Authorizations.table_exists():
     db.create_tables([Authorizations])
+
+if not VideoAndAudioToVideoTask.table_exists():
+    db.create_tables([VideoAndAudioToVideoTask])
+
+if not VideoAndAudioToVideoResult.table_exists():
+    db.create_tables([VideoAndAudioToVideoResult])
