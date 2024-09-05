@@ -41,10 +41,12 @@ class Snowflake:
             self.last_timestamp = timestamp
             return ((timestamp - 1420070400000) << 22) | (self.datacenter_id << 17) | (self.worker_id << 12) | self.sequence
 
+    def generate_temp_dir(self) -> str:
+        return str(self.generate())
 
 
 if __name__ == '__main__':
     snowflake = Snowflake(1, 1)
     for i in range(10):
 
-        print(snowflake.generate())
+        print(snowflake.generate_temp_dir())
