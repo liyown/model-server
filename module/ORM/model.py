@@ -7,6 +7,7 @@ class ImageToVideoTaskModel(BaseModel):
     task_id: Optional[int] = None
     image_key: str
     audio_key: str
+    callback_url: Optional[str] = None
     result_id: Optional[int] = None
     status: int
 
@@ -20,6 +21,7 @@ class VideoAndAudioToVideoTaskModel(BaseModel):
     task_id: Optional[int] = None
     video_key: str
     audio_key: str
+    callback_url: Optional[str] = None
     result_id: Optional[int] = None
     status: int
 

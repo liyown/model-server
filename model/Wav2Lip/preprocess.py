@@ -18,7 +18,7 @@ from glob import glob
 import audio
 from hparams import hparams as hp
 
-import face_detection
+import model.Wav2Lip.face_detection as face_detection
 
 parser = argparse.ArgumentParser()
 

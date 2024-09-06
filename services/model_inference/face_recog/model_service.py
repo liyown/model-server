@@ -55,7 +55,7 @@ class FaceRecognitionService:
                 }))
             except Exception as e:
                 logger.error(f"任务 {task.get('task_id')} 处理失败: {e}")
-                face_task_queue.mark_task_as_failed(task.get('task_id'))
+                face_task_queue.mark_task_as_failed(task.get('task_id'), str(e))
 
     def stop(self):
         # 等待所有线程完成

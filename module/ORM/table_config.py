@@ -11,6 +11,7 @@ class ImageToVideoTask(Model):
     # 可变字符串字段，最大长度为255
     image_key = CharField(max_length=255)  # 图片链接
     audio_key = CharField(max_length=255)  # 音频链接
+    callback_url = CharField(max_length=255, null=True)  # 回调地址
     result_id = BigIntegerField(null=True)  # 生成视频结果ID
     created_at = DateTimeField(default=datetime.now)  # 创建时间
     updated_at = DateTimeField(default=datetime.now, constraints=[SQL('ON UPDATE CURRENT_TIMESTAMP')])  # 更新时间
@@ -28,6 +29,7 @@ class ImageToVideoTask(Model):
 class ImageToVideoResult(Model):
     result_id = BigIntegerField(unique=True, primary_key=True)  # 结果ID
     video_key = CharField(max_length=255)  # 视频链接
+    failed_reason = TextField(null=True)  # 失败原因
     created_at = DateTimeField(default=datetime.now)  # 创建时间
     updated_at = DateTimeField(default=datetime.now, constraints=[SQL('ON UPDATE CURRENT_TIMESTAMP')])  # 更新时间
 
@@ -45,6 +47,7 @@ class VideoAndAudioToVideoTask(Model):
     # 可变字符串字段，最大长度为255
     video_key = CharField(max_length=255)  # 图片链接
     audio_key = CharField(max_length=255)  # 音频链接
+    callback_url = CharField(max_length=255, null=True)  # 回调地址
     result_id = BigIntegerField(null=True)  # 生成视频结果ID
     created_at = DateTimeField(default=datetime.now)  # 创建时间
     updated_at = DateTimeField(default=datetime.now, constraints=[SQL('ON UPDATE CURRENT_TIMESTAMP')])  # 更新时间

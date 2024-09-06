@@ -1,30 +1,19 @@
-import io
 import os
 import platform
 import subprocess
 from typing import Optional
-
-import av
 import cv2
 import numpy as np
-import torchaudio
 from torch import Tensor
-from torchaudio.transforms import Resample
 from tqdm import tqdm
-
 from model.Interface import BaseHandle
-from torchvision.models import resnet18
-from PIL import Image
-import torchvision.transforms as transforms
 import torch
-from torchvision.models.resnet import ResNet18_Weights
 from pydantic import BaseModel
-
 from model.Wav2Lip import audio
-from model.Wav2Lip.inference import load_model, datagen
+from model.Wav2Lip.inference import load_model, get_smoothened_boxes
+from model.Wav2Lip.face_detection.api import FaceAlignment, LandmarksType
 from module.config.env_config import config
 import logging
-
 from utils.snowflake import Snowflake
 
 logger = logging.getLogger(__name__)
@@ -37,10 +26,7 @@ class Wav2LipInputModel(BaseModel):
     face_path: str
     audio_path: str
     # If True, then use only first video frame for inference
-    static: Optional[bool] = config.get("static", False)
-    resize_factor: Optional[float] = config.get("resize_factor", 1)
-    nosmooth: Optional[bool] = config.get("nosmooth", False)
-    crop: Optional[tuple] = config.get("crop", (0, -1, 0, -1))
+    resize_factor: Optional[float] = config.get("resize_factor", 1, dtype=float)
     rotate: Optional[bool] = config.get("rotate", False)
 
 
@@ -51,18 +37,23 @@ class Wav2LipHandle(BaseHandle):
 
     def __init__(self):
         self.model = None
-        self.face_det_batch_size = config.get("face_det_batch_size", 16)
-        self.box = config.get("box", (-1, -1, -1, -1))
-        self.wav2lip_batch_size = config.get("wav2lip_batch_size", 128)
+        self.face_det_batch_size = config.get("face_det_batch_size", 1, dtype=int)
+        self.box = (-1, -1, -1, -1)
+        self.wav2lip_batch_size = config.get("wav2lip_batch_size", 128, dtype=int)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.temp_dir = config.get("temp_dir", "temp")
+        self.temp_dir = config.get("temp_dir", "model/Wav2Lip/temp")
         self.snowflake = Snowflake(2, 1)
+        self.crop = [0, -1, 0, -1]
+        self.static = False
+        self.img_size = 96
+        self.pad = [0, 10, 0, 0]
+        self.nosmooth = False
 
     def initialize(self, **kwargs):
         """
         初始化人脸识别模型
         """
-        self.model = load_model("model/Wav2Lip/checkpoints/wav2lip_gan.pth")
+        self.model = load_model("model/Wav2Lip/models/wav2lip.pth", self.device)
         logger.debug("Wav2Lip model loaded successfully")
 
     def preprocess(self, raw_data: Wav2LipInputModel):
@@ -75,7 +66,7 @@ class Wav2LipHandle(BaseHandle):
         logger.debug("Audio data processed successfully")
         # 视频输入处理
         video, fps = self.decode_video_from_file(raw_data.face_path, raw_data.resize_factor, raw_data.rotate,
-                                                 raw_data.crop)
+                                                 self.crop)
         logger.debug("Video data processed successfully")
         # 生成音频特征块
         mel_chunks = self.generate_audio_feature_chunks(mel, fps)
@@ -86,7 +77,7 @@ class Wav2LipHandle(BaseHandle):
 
         full_frames = video[:len(mel_chunks)]
 
-        gen_data = datagen(full_frames.copy(), mel_chunks)
+        gen_data = self.datagen(full_frames.copy(), mel_chunks)
 
         return gen_data, len(mel_chunks), full_frames, fps, raw_data.audio_path
 
@@ -97,7 +88,7 @@ class Wav2LipHandle(BaseHandle):
         temp_file_name = self.snowflake.generate_temp_dir()
         temp_file_full_path = f'{self.temp_dir}/{temp_file_name}.avi'
 
-        output_file_full_path = f'{self.temp_dir}/{self.snowflake.generate_temp_dir()}'
+        output_file_full_path = f'{self.temp_dir}/{self.snowflake.generate_temp_dir()}.mp4'
 
         for i, (img_batch, mel_batch, frames, coords) in enumerate(tqdm(input_data[0],
                                                                         total=int(
@@ -125,7 +116,7 @@ class Wav2LipHandle(BaseHandle):
 
         out.release()
 
-        command = 'ffmpeg -y -i {} -i {} -strict -2 -q:v 1 {}'.format(input_data[4], 'temp/result.avi',
+        command = 'ffmpeg -y -loglevel warning -i {} -i {} -strict -2 -q:v 1 {} '.format(input_data[4], temp_file_full_path,
                                                                       output_file_full_path)
         subprocess.call(command, shell=platform.system() != 'Windows')
 
@@ -171,8 +162,109 @@ class Wav2LipHandle(BaseHandle):
             i += 1
         return mel_chunks
 
+    def datagen(self, frames, mels):
+        img_batch, mel_batch, frame_batch, coords_batch = [], [], [], []
+
+        if self.box[0] == -1:
+            if not self.static:
+                face_det_results = self.face_detect(frames)  # BGR2RGB for CNN face detection
+            else:
+                face_det_results = self.face_detect([frames[0]])
+        else:
+            print('Using the specified bounding box instead of face detection...')
+            y1, y2, x1, x2 = self.box
+            face_det_results = [[f[y1: y2, x1:x2], (y1, y2, x1, x2)] for f in frames]
+
+        for i, m in enumerate(mels):
+            idx = 0 if self.static else i % len(frames)
+            frame_to_save = frames[idx].copy()
+            face, coords = face_det_results[idx].copy()
+
+            face = cv2.resize(face, (self.img_size, self.img_size))
+
+            img_batch.append(face)
+            mel_batch.append(m)
+            frame_batch.append(frame_to_save)
+            coords_batch.append(coords)
+
+            if len(img_batch) >= self.wav2lip_batch_size:
+                img_batch, mel_batch = np.asarray(img_batch), np.asarray(mel_batch)
+
+                img_masked = img_batch.copy()
+                img_masked[:, self.img_size // 2:] = 0
+
+                img_batch = np.concatenate((img_masked, img_batch), axis=3) / 255.
+                mel_batch = np.reshape(mel_batch, [len(mel_batch), mel_batch.shape[1], mel_batch.shape[2], 1])
+
+                yield img_batch, mel_batch, frame_batch, coords_batch
+                img_batch, mel_batch, frame_batch, coords_batch = [], [], [], []
+
+        if len(img_batch) > 0:
+            img_batch, mel_batch = np.asarray(img_batch), np.asarray(mel_batch)
+
+            img_masked = img_batch.copy()
+            img_masked[:, self.img_size // 2:] = 0
+
+            img_batch = np.concatenate((img_masked, img_batch), axis=3) / 255.
+            mel_batch = np.reshape(mel_batch, [len(mel_batch), mel_batch.shape[1], mel_batch.shape[2], 1])
+
+            yield img_batch, mel_batch, frame_batch, coords_batch
+
+    def face_detect(self, images):
+        detector = FaceAlignment(LandmarksType._2D, flip_input=False)
+
+        batch_size = self.face_det_batch_size
+
+        while 1:
+            predictions = []
+            try:
+                for i in tqdm(range(0, len(images), batch_size)):
+                    predictions.extend(detector.get_detections_for_batch(np.array(images[i:i + batch_size])))
+            except RuntimeError:
+                if batch_size == 1:
+                    raise RuntimeError(
+                        'Image too big to run face detection on GPU. Please use the --resize_factor argument')
+                batch_size //= 2
+                print('Recovering from OOM error; New batch size: {}'.format(batch_size))
+                continue
+            break
+
+        results = []
+        pady1, pady2, padx1, padx2 = self.pad
+        for rect, image in zip(predictions, images):
+            if rect is None:
+                cv2.imwrite('temp/faulty_frame.jpg', image)  # check this frame where the face was not detected.
+                raise ValueError('Face not detected! Ensure the video contains a face in all the frames.')
+
+            y1 = max(0, rect[1] - pady1)
+            y2 = min(image.shape[0], rect[3] + pady2)
+            x1 = max(0, rect[0] - padx1)
+            x2 = min(image.shape[1], rect[2] + padx2)
+
+            results.append([x1, y1, x2, y2])
+
+        boxes = np.array(results)
+        if not self.nosmooth: boxes = get_smoothened_boxes(boxes, T=5)
+        results = [[image[y1: y2, x1:x2], (y1, y2, x1, x2)] for image, (x1, y1, x2, y2) in zip(images, boxes)]
+
+        del detector
+        return results
+
 
 # ------------------------------------------------------ 测试用例 ------------------------------------------------------
+
+#
+# wav2lipHandle = Wav2LipHandle()
+# wav2lipHandle.initialize()
+#
+# raw_data = Wav2LipInputModel.parse_obj({
+#     "face_path": "test/test.mp4",
+#     "audio_path": "test/test_1.wav",
+#     "resize_factor": 0.1,
+# })
+#
+# result = wav2lipHandle.handle(raw_data)
+
 
 def ttest_wav_byte_read():
     wav = audio.load_wav("test/test.wav", 16000)
@@ -181,8 +273,8 @@ def ttest_wav_byte_read():
     with open("test/test.wav", "rb") as f:
         audio_bytes = f.read()
 
-    faceRecognitionHandle = FaceRecognitionHandle()
-    wav_2, _ = faceRecognitionHandle.load_wav_from_bytes(audio_bytes)
+    wav2lipHandle = Wav2LipHandle()
+    wav_2 = wav2lipHandle.load_wav_from_bytes(audio_bytes)
 
     # 检查音频数据是否相同
     assert torch.all(torch.eq(Tensor(wav), wav_2))
@@ -215,10 +307,29 @@ def ttest_video_byte_read():
     with open("test/test.mp4", "rb") as f:
         video_bytes = f.read()
 
-    faceRecognitionHandle = FaceRecognitionHandle()
-    video = faceRecognitionHandle.decode_video_from_bytes(video_bytes)
+    wav2lipHandle = Wav2LipHandle()
+    full_frames_2, fps_2 = wav2lipHandle.decode_video_from_bytes(video_bytes)
 
     # 检查视频数据是否相同
-    assert len(full_frames) == len(video)
+    assert len(full_frames) == len(full_frames_2)
     assert all(
-        [torch.all(torch.eq(Tensor(frame), Tensor(video_frame))) for frame, video_frame in zip(full_frames, video)])
+        [torch.all(torch.eq(Tensor(frame), Tensor(video_frame))) for frame, video_frame in zip(full_frames, full_frames_2)])
+
+
+def _test_mel_generate():
+    wav_1 = audio.load_wav("test/test_1.wav", 16000)
+    mel_1 = audio.melspectrogram(wav_1)
+
+    wav2lipHandle = Wav2LipHandle()
+    # 音频数据处理
+    wav = wav2lipHandle.load_wav_from_file("test/test_1.wav")
+    mel = audio.melspectrogram(wav)
+    logger.debug("Audio data processed successfully")
+    # 视频输入处理
+    video, fps = wav2lipHandle.decode_video_from_file("test/test.mp4")
+    logger.debug("Video data processed successfully")
+    # 生成音频特征块
+    mel_chunks = wav2lipHandle.generate_audio_feature_chunks(mel, fps)
+
+    assert len(mel_chunks) == 10
+    assert all([len(mel_chunk[0]) == 16 for mel_chunk in mel_chunks])

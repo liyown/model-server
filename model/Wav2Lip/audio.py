@@ -4,7 +4,7 @@ import numpy as np
 # import tensorflow as tf
 from scipy import signal
 from scipy.io import wavfile
-from hparams import hparams as hp
+from model.Wav2Lip.hparams import hparams as hp
 
 
 def load_wav(path, sr):
@@ -62,7 +62,6 @@ def melspectrogram(wav):
 def _lws_processor():
     import lws
     return lws.lws(hp.n_fft, get_hop_size(), fftsize=hp.win_size, mode="speech")
-
 
 def _stft(y):
     if hp.use_lws:

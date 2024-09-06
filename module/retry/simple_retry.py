@@ -27,9 +27,8 @@ def retry_with_timeout(max_attempts, delay, timeout_seconds, fail_callback=None)
                         else:
                             if fail_callback:
                                 fail_callback()
-                            else:
-                                logger.error(f"Operation failed after {max_attempts} attempts")
-                                raise Exception(f"Operation failed after {max_attempts} attempts")
+                            logger.error(f"Operation failed after {max_attempts} attempts")
+                            raise Exception(f"Operation failed after {max_attempts} attempts")
 
         return wrapper
 

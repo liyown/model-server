@@ -30,8 +30,8 @@ class OSSVideoService(OSSBase):
         :param file: BytesIO, file
         :return: str, object name
         """
-        self.upload_file_from_bytes(object_name, file)
-        return object_name
+        full_key = self.upload_file_from_bytes(object_name, file)
+        return full_key
 
     def download_video_to_bytes(self, object_name):
         """

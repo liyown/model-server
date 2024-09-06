@@ -42,3 +42,9 @@ class OSSAudioService(OSSBase):
         audio_data = result.read()
         return audio_data
 
+
+
+if __name__ == '__main__':
+    oss_audio_service = OSSAudioService()
+    key = oss_audio_service.upload_audio_from_file("data/test_1.wav", "test_1.wav")
+    print(key)

@@ -82,7 +82,7 @@ class BaseHandle(ABC):
             resampler = Resample(orig_freq=sample_rate, new_freq=target_sample_rate)
             waveform = resampler(waveform)
 
-        return waveform
+        return waveform.squeeze()
 
     def decode_video_from_bytes(self, video_bytes: bytes, resize_factor=1, rotate=False, crop=(0, -1, 0, -1)):
         # 创建临时文件

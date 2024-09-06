@@ -76,9 +76,9 @@ class ImageToVideoTaskTaskQueue:
                 ImageToVideoTask.task_id == task_id).execute()
         logger.info(f"任务 {task_id} 处理完成")
 
-    def mark_task_as_failed(self, task_id: int):
+    def mark_task_as_failed(self, task_id: int, failed_reason: str):
         """标记任务为失败并更新数据库中的状态."""
-        ImageToVideoTask.update(status=TaskStatus.FAILED.value).where(
+        ImageToVideoTask.update(status=TaskStatus.FAILED.value, failed_reason=failed_reason).where(
             ImageToVideoTask.task_id == task_id).execute()
         logger.error(f"任务 {task_id} 处理失败")
 
@@ -94,7 +94,6 @@ class ImageToVideoTaskTaskQueue:
             result = ImageToVideoResult.get(ImageToVideoResult.result_id == task.result_id)
             return result.__data__
         return None
-
 
 
 class VideoAndAudioToVideoTaskTaskQueue:
@@ -160,10 +159,13 @@ class VideoAndAudioToVideoTaskTaskQueue:
                 VideoAndAudioToVideoTask.task_id == task_id).execute()
         logger.info(f"任务 {task_id} 处理完成")
 
-    def mark_task_as_failed(self, task_id: int):
+    def mark_task_as_failed(self, task_id: int, failed_reason: str):
         """标记任务为失败并更新数据库中的状态."""
-        VideoAndAudioToVideoTask.update(status=TaskStatus.FAILED.value).where(
-            VideoAndAudioToVideoTask.task_id == task_id).execute()
+        result_id = self.Snowflake.generate()
+        with db.atomic():
+            VideoAndAudioToVideoTask.update(status=TaskStatus.FAILED.value, result_id=result_id).where(
+                VideoAndAudioToVideoTask.task_id == task_id).execute()
+            VideoAndAudioToVideoResult.create(result_id=result_id, failed_reason=failed_reason)
         logger.error(f"任务 {task_id} 处理失败")
 
     def get_result(self, task_id: int):

@@ -2,6 +2,7 @@ from pathlib import Path
 import logging
 import os
 from pathlib import Path
+from typing import Literal
 
 import GPUtil
 from fastapi import HTTPException, Depends, Request, APIRouter
@@ -12,7 +13,7 @@ from starlette.responses import HTMLResponse, FileResponse, JSONResponse
 
 from module.JWT.jwt import create_access_token
 from module.JWT.resource_access_token import create_unique_resource_token
-from module.ORM.table_config import Authorizations, ImageToVideoTask
+from module.ORM.table_config import Authorizations, ImageToVideoTask, VideoAndAudioToVideoTask
 from module.config.env_config import config
 
 router = APIRouter()
@@ -113,15 +114,26 @@ async def delete_token(api_key: str, payload: dict = Depends(verify_token_in_coo
     return {"code": 200, "message": "Token deleted successfully"}
 
 
+class TaskTypeRequest(BaseModel):
+    task_type: Literal["image_to_video", "video_with_audio_to_video"]
+
+
 # 查看当前未完成的任务数
-@router.get("/task_count")
-async def task_count(payload: dict = Depends(verify_token_in_cookie)):
+@router.post("/task_count")
+async def task_count(task_type: TaskTypeRequest, payload: dict = Depends(verify_token_in_cookie)):
     if payload.get("sub") != config.get("admin"):
         raise HTTPException(status_code=401, detail="Invalid token")
 
-    task_counts = ImageToVideoTask.select().where(
-        (ImageToVideoTask.status == 0) | (ImageToVideoTask.status == 1)
-    ).count()
+    if task_type.task_type == "image_to_video":
+        task_counts = ImageToVideoTask.select().where(
+            (ImageToVideoTask.status == 0) | (ImageToVideoTask.status == 1)
+        ).count()
+    elif task_type.task_type == "video_with_audio_to_video":
+        task_counts = VideoAndAudioToVideoTask.select().where(
+            (VideoAndAudioToVideoTask.status == 0) | (VideoAndAudioToVideoTask.status == 1)
+        ).count()
+    else:
+        raise HTTPException(status_code=400, detail="Invalid task type")
 
     return {"code": 200, "message": "Success", "data": {"task_count": task_counts}}
 
