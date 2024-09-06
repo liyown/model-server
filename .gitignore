@@ -4,3 +4,5 @@
 /module/OSS/data/monalisa.wav
 /module/OSS/data/test_1.jpg
 .env
+
+__pycache__
