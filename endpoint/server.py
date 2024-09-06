@@ -28,13 +28,13 @@ app.add_middleware(
 
 
 def service_start():
-    face_service.start()
+    # face_service.start()
     video_with_audio_task_service.start()
     nvmlInit()
 
 
 def service_stop():
-    face_service.stop()
+    # face_service.stop()
     video_with_audio_task_service.stop()
     nvmlShutdown()
 
