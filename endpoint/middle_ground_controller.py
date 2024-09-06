@@ -160,3 +160,10 @@ async def get_gpu_status():
         gpu_status.append(gpu_info)
 
     return {"gpu_status": gpu_status}
+
+
+
+
+@router.post("/test")
+async def test():
+    print("payload")

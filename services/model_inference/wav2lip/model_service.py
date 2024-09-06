@@ -85,7 +85,6 @@ class VideoAndAudioToVideoService:
                                                               }))
                 # 调用回调
                 if task.get("callback_url"):
-                    # todo 调用回调
                     requests.post(task.get("callback_url"),
                                   json={"code": 200, "msg": "success", "data": {"video_key": full_key}})
 
@@ -93,7 +92,6 @@ class VideoAndAudioToVideoService:
                 logger.error(f"任务 {task.get('task_id')} 处理失败: {e}")
                 video_with_audio_task_queue.mark_task_as_failed(task.get('task_id'), str(e))
                 if task.get("callback_url"):
-                    # todo 调用回调
                     requests.post(task.get("callback_url"),
                                   json={"code": 500, "msg": "failed", "data": {"reason": str(e)}})
 
