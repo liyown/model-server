@@ -5,3 +5,4 @@
 /module/OSS/data/test_1.jpg
 .env
 * text=auto eol=lf
+__pycache__
