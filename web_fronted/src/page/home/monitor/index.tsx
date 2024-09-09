@@ -1,6 +1,7 @@
-import { Statistic, Tag } from "@arco-design/web-react";
+import { Message, Statistic, Tag } from "@arco-design/web-react";
 import { useEffect, useState } from "react";
 import instant from "@/axios";
+import { useNavigate } from "react-router-dom";
 
 interface GpuStatus {
   load: number;
@@ -22,8 +23,31 @@ export function Component() {
     memory_free: 0,
     temperature: 0
   });
+  const navigate = useNavigate(); 
 
   useEffect(() => {
+    instant.get("/task_count").then((res) => {
+      if (res.status === 200) {
+        setTaskCount(res.data.data.task_count);
+      }
+    }).catch((error) => {
+      if (error.response) {
+        const statusCode = error.response.status;
+        if (statusCode === 401) {
+          // 401 未登录，跳转到登录页面
+          Message.error("请先登录");
+          navigate("/login");
+        } else {
+          // 处理其他状态码
+          console.error(`An error occurred: HTTP ${statusCode}`, error);
+        }
+      } else {
+        // 处理没有响应的错误
+        Message.error("网络错误");
+      }
+    });
+
+    
     // 每2s更新一次数据
     setInterval(() => {
       // 获取数据
@@ -31,7 +55,7 @@ export function Component() {
         if (res.status === 200) {
           setTaskCount(res.data.data.task_count);
         }
-      });
+      })
 
       instant.get("/gpu_status").then((res) => {
         if (res.status === 200) {
@@ -71,12 +95,16 @@ export function Component() {
             className="mx-12"
             suffix={"%"}
           />
-          <Statistic
-            title="GPU温度"
-            value={gpuStatus.temperature}
-            className="mx-12"
-            suffix={"℃"}
-          />
+          {
+            gpuStatus.temperature !== 0 && (
+              <Statistic
+                title="GPU 温度"
+                value={gpuStatus.temperature}
+                className="mx-12"
+                suffix="°C"
+              />
+            )
+          }
         </div>
       </div>
     </>

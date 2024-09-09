@@ -1,6 +1,6 @@
 import axios from 'axios';
 const instant = axios.create({
-  baseURL: "http://127.0.0.1:12345/admin",
+  baseURL: "http://127.0.0.1:1221/admin/api",
   timeout: 10000,
   headers: {
     "Content-Type": "application/json",

@@ -3,12 +3,19 @@ import logging
 import os
 from pathlib import Path
 from typing import Literal
-
+from pynvml import (
+    nvmlInit,
+    nvmlDeviceGetHandleByIndex,
+    nvmlDeviceGetMemoryInfo,
+    nvmlDeviceGetTemperature,
+    nvmlDeviceGetUtilizationRates,
+    NVMLError_NotSupported,
+    NVMLError
+)
 import GPUtil
 from fastapi import HTTPException, Depends, Request, APIRouter
 from jose import jwt, JWTError
 from pydantic import BaseModel
-from pynvml import nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo
 from starlette.responses import HTMLResponse, FileResponse, JSONResponse
 
 from module.JWT.jwt import create_access_token
@@ -32,27 +39,17 @@ class AddTokenRequest(BaseModel):
     remark: str
 
 
-@router.get('/')
-async def index():
-    file_path = BASE_DIR / './web_fronted/dist/index.html'
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Index file not found")
-    return HTMLResponse(
-        content=open(file_path, 'r', encoding='utf-8').read(),
-        media_type='text/html',
-        headers={'Cache-Control': 'no-cache'}
-    )
 
 
 @router.get('/assets/{file_path:path}')
 async def assets(file_path: str):
-    full_path = BASE_DIR / f'./web_fronted/dist/assets/{file_path}'
+    full_path = BASE_DIR / 'web_fronted' / 'dist' / 'assets' / file_path
     if not os.path.exists(full_path):
         raise HTTPException(status_code=404, detail="Asset not found")
     return FileResponse(full_path)
 
 
-@router.post("/login")
+@router.post("/api/login")
 async def index(login_request: LoginRequest):
     # 验证用户名和密码
     if login_request.username == config.get("admin") and login_request.password == config.get("password"):
@@ -83,7 +80,7 @@ async def verify_token_in_cookie(request: Request):
 
 
 # 定义路由
-@router.post("/token")
+@router.post("/api/token")
 async def token(add_token_request: AddTokenRequest, payload: dict = Depends(verify_token_in_cookie)):
     # 如果验证通过，可以继续处理请求
     if payload.get("sub") != config.get("admin"):
@@ -96,7 +93,7 @@ async def token(add_token_request: AddTokenRequest, payload: dict = Depends(veri
 
 
 # 获取全部token 返回一个list
-@router.get("/tokens")
+@router.get("/api/tokens")
 async def tokens(payload: dict = Depends(verify_token_in_cookie)):
     if payload.get("sub") != config.get("admin"):
         raise HTTPException(status_code=401, detail="Invalid token")
@@ -105,7 +102,7 @@ async def tokens(payload: dict = Depends(verify_token_in_cookie)):
             "data": [{"api_key": token.api_key, "remark": token.remark, "key": token.id} for token in tokens]}
 
 
-@router.delete("/token/{api_key}")
+@router.delete("/api/token/{api_key}")
 async def delete_token(api_key: str, payload: dict = Depends(verify_token_in_cookie)):
     if payload.get("sub") != config.get("admin"):
         raise HTTPException(status_code=401, detail="Invalid token")
@@ -114,32 +111,21 @@ async def delete_token(api_key: str, payload: dict = Depends(verify_token_in_coo
     return {"code": 200, "message": "Token deleted successfully"}
 
 
-class TaskTypeRequest(BaseModel):
-    task_type: Literal["image_to_video", "video_with_audio_to_video"]
-
-
 # 查看当前未完成的任务数
-@router.post("/task_count")
-async def task_count(task_type: TaskTypeRequest, payload: dict = Depends(verify_token_in_cookie)):
+@router.get("/api/task_count")
+async def task_count(payload: dict = Depends(verify_token_in_cookie)):
     if payload.get("sub") != config.get("admin"):
         raise HTTPException(status_code=401, detail="Invalid token")
-
-    if task_type.task_type == "image_to_video":
-        task_counts = ImageToVideoTask.select().where(
-            (ImageToVideoTask.status == 0) | (ImageToVideoTask.status == 1)
-        ).count()
-    elif task_type.task_type == "video_with_audio_to_video":
-        task_counts = VideoAndAudioToVideoTask.select().where(
-            (VideoAndAudioToVideoTask.status == 0) | (VideoAndAudioToVideoTask.status == 1)
-        ).count()
-    else:
-        raise HTTPException(status_code=400, detail="Invalid task type")
-
+    task_counts = VideoAndAudioToVideoTask.select().where(
+        (VideoAndAudioToVideoTask.status == 0) | (VideoAndAudioToVideoTask.status == 1)
+    ).count()
     return {"code": 200, "message": "Success", "data": {"task_count": task_counts}}
 
 
-@router.get("/gpu_status")
-async def get_gpu_status():
+@router.get("/api/gpu_status")
+async def get_gpu_status(payload: dict = Depends(verify_token_in_cookie)):
+    if payload.get("sub") != config.get("admin"):
+        raise HTTPException(status_code=401, detail="Invalid token")
     gpus = GPUtil.getGPUs()
     gpu_status = []
 
@@ -150,20 +136,45 @@ async def get_gpu_status():
         gpu_info = {
             "id": gpu.id,
             "name": gpu.name,
-            "load": gpu.load * 100,  # GPU使用率
             "memory_total": mem_info.total / (1024 ** 2),  # 总内存(MB)
             "memory_used": mem_info.used / (1024 ** 2),  # 已使用内存(MB)
             "memory_free": mem_info.free / (1024 ** 2),  # 可用内存(MB)
-            "temperature": gpu.temperature,  # GPU温度
             "uuid": gpu.uuid
         }
+
+        # 尝试获取负载和温度信息，如果不支持则跳过
+        try:
+            util_info = nvmlDeviceGetUtilizationRates(handle)
+            gpu_info["load"] = util_info.gpu / 100.0  # Load percentage
+        except NVMLError_NotSupported:
+            gpu_info["load"] = 0
+        
+        try:
+            temp_info = nvmlDeviceGetTemperature(handle, 0)  # 0 表示 GPU 温度
+
+            print(temp_info)
+
+            gpu_info["temperature"] = temp_info  # Temperature
+        except NVMLError_NotSupported:
+            gpu_info["temperature"] = 0
+
         gpu_status.append(gpu_info)
 
     return {"gpu_status": gpu_status}
 
 
-
-
-@router.post("/test")
+@router.post("/api/test")
 async def test():
     print("payload")
+
+
+@router.get('/{path:path}')
+async def index():
+    file_path = BASE_DIR / 'web_fronted' / 'dist' / 'index.html'
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Index file not found")
+    return HTMLResponse(
+        content=open(file_path, 'r', encoding='utf-8').read(),
+        media_type='text/html',
+        headers={'Cache-Control': 'no-cache'}
+    )

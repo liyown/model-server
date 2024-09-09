@@ -41,19 +41,20 @@ class Wav2LipHandle(BaseHandle):
         self.box = (-1, -1, -1, -1)
         self.wav2lip_batch_size = config.get("wav2lip_batch_size", 128, dtype=int)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.temp_dir = config.get("temp_dir", "model/Wav2Lip/temp")
+        self.temp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), config.get("temp_dir", "temp"))
         self.snowflake = Snowflake(2, 1)
         self.crop = [0, -1, 0, -1]
         self.static = False
         self.img_size = 96
         self.pad = [0, 10, 0, 0]
         self.nosmooth = False
+        self.current_path = os.path.dirname(os.path.abspath(__file__))
 
     def initialize(self, **kwargs):
         """
         初始化人脸识别模型
         """
-        self.model = load_model("model/Wav2Lip/models/wav2lip.pth", self.device)
+        self.model = load_model(os.path.join(self.current_path,"models/wav2lip.pth"), self.device)
         logger.debug("Wav2Lip model loaded successfully")
 
     def preprocess(self, raw_data: Wav2LipInputModel):
@@ -77,7 +78,11 @@ class Wav2LipHandle(BaseHandle):
 
         full_frames = video[:len(mel_chunks)]
 
+        logger.debug("数据处理完成")
+
         gen_data = self.datagen(full_frames.copy(), mel_chunks)
+
+        logger.debug("数据生成完成")
 
         return gen_data, len(mel_chunks), full_frames, fps, raw_data.audio_path
 
@@ -90,6 +95,8 @@ class Wav2LipHandle(BaseHandle):
 
         output_file_full_path = f'{self.temp_dir}/{self.snowflake.generate_temp_dir()}.mp4'
 
+        logger.debug("开始推理")
+        logger.debug(self.device)
         for i, (img_batch, mel_batch, frames, coords) in enumerate(tqdm(input_data[0],
                                                                         total=int(
                                                                             np.ceil(float(input_data[
@@ -111,15 +118,19 @@ class Wav2LipHandle(BaseHandle):
                 y1, y2, x1, x2 = c
                 p = cv2.resize(p.astype(np.uint8), (x2 - x1, y2 - y1))
 
+                # TODO: GFP-GAN 提高视频质量
+                
+
                 f[y1:y2, x1:x2] = p
                 out.write(f)
 
         out.release()
+        logger.debug("推理完成")
 
         command = 'ffmpeg -y -loglevel warning -i {} -i {} -strict -2 -q:v 1 {} '.format(input_data[4], temp_file_full_path,
                                                                       output_file_full_path)
         subprocess.call(command, shell=platform.system() != 'Windows')
-
+        logger.debug("合成完成")
         return output_file_full_path, temp_file_full_path
 
     def postprocess(self, output_data):
@@ -169,6 +180,7 @@ class Wav2LipHandle(BaseHandle):
             if not self.static:
                 face_det_results = self.face_detect(frames)  # BGR2RGB for CNN face detection
             else:
+                # 结果为每个视频帧的人脸和坐标，为检测出来的实际人脸和坐标
                 face_det_results = self.face_detect([frames[0]])
         else:
             print('Using the specified bounding box instead of face detection...')
@@ -180,11 +192,16 @@ class Wav2LipHandle(BaseHandle):
             frame_to_save = frames[idx].copy()
             face, coords = face_det_results[idx].copy()
 
+            # 处理为模型输入的图片大小 96*96
             face = cv2.resize(face, (self.img_size, self.img_size))
-
+            
+            # 保存图片，此为resize后的图片
             img_batch.append(face)
             mel_batch.append(m)
+            # 保存原始图片
             frame_batch.append(frame_to_save)
+
+            # 保存人脸坐标
             coords_batch.append(coords)
 
             if len(img_batch) >= self.wav2lip_batch_size:
