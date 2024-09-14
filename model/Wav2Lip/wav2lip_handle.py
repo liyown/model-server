@@ -16,6 +16,8 @@ from module.config.env_config import config
 import logging
 from utils.snowflake import Snowflake
 
+from GFPGAN.gfpgan_handle import GFPGANHandle
+
 logger = logging.getLogger(__name__)
 
 
@@ -23,8 +25,9 @@ class Wav2LipInputModel(BaseModel):
     """
     Wav2Lip模型配置
     """
-    face_path: str
+    video_path: str
     audio_path: str
+    improve_video: Optional[bool] = False
     # If True, then use only first video frame for inference
     resize_factor: Optional[float] = config.get("resize_factor", 1, dtype=float)
     rotate: Optional[bool] = config.get("rotate", False)
@@ -49,6 +52,9 @@ class Wav2LipHandle(BaseHandle):
         self.pad = [0, 10, 0, 0]
         self.nosmooth = False
         self.current_path = os.path.dirname(os.path.abspath(__file__))
+        
+
+        self.GFPGanHandle = GFPGANHandle()
 
     def initialize(self, **kwargs):
         """
@@ -66,7 +72,7 @@ class Wav2LipHandle(BaseHandle):
         mel = audio.melspectrogram(wav)
         logger.debug("Audio data processed successfully")
         # 视频输入处理
-        video, fps = self.decode_video_from_file(raw_data.face_path, raw_data.resize_factor, raw_data.rotate,
+        video, fps = self.decode_video_from_file(raw_data.video_path, raw_data.resize_factor, raw_data.rotate,
                                                  self.crop)
         logger.debug("Video data processed successfully")
         # 生成音频特征块
@@ -84,7 +90,7 @@ class Wav2LipHandle(BaseHandle):
 
         logger.debug("数据生成完成")
 
-        return gen_data, len(mel_chunks), full_frames, fps, raw_data.audio_path
+        return gen_data, len(mel_chunks), full_frames, fps, raw_data.audio_path, raw_data.improve_video
 
     def inference(self, input_data):
         """
@@ -103,6 +109,8 @@ class Wav2LipHandle(BaseHandle):
                                                                                               1])) / self.wav2lip_batch_size))):
             if i == 0:
                 frame_h, frame_w = input_data[2][0].shape[:-1]
+                if input_data[5]:
+                    frame_h, frame_w = frame_h * 2, frame_w * 2
                 out = cv2.VideoWriter(temp_file_full_path,
                                       cv2.VideoWriter_fourcc(*'DIVX'), input_data[3], (frame_w, frame_h))
 
@@ -118,10 +126,12 @@ class Wav2LipHandle(BaseHandle):
                 y1, y2, x1, x2 = c
                 p = cv2.resize(p.astype(np.uint8), (x2 - x1, y2 - y1))
 
-                # TODO: GFP-GAN 提高视频质量
-                
 
                 f[y1:y2, x1:x2] = p
+
+                # GFP-GAN 提高视频质量
+                if input_data[5]:
+                    f = self.GFPGanHandle.handle_frame(f)
                 out.write(f)
 
         out.release()

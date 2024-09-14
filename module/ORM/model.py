@@ -21,6 +21,7 @@ class VideoAndAudioToVideoTaskModel(BaseModel):
     task_id: Optional[int] = None
     video_key: str
     audio_key: str
+    improve_video: Optional[bool] = False
     callback_url: Optional[str] = None
     result_id: Optional[int] = None
     status: int

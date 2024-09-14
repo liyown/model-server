@@ -1,5 +1,5 @@
 import queue
-from module.ORM.mysql_config import db
+from module.ORM.mysql_config import db, with_db_connection
 from constants.ImageToVideoTaskConstants import TaskStatus
 from module.ORM.model import ImageToVideoTaskModel, ImageToVideoResultModel, VideoAndAudioToVideoTaskModel, \
     VideoAndAudioToVideoResultModel
@@ -24,6 +24,7 @@ class ImageToVideoTaskTaskQueue:
         # 启动时加载未完成的任务到队列中
         self._load_pending_tasks()
 
+    @with_db_connection
     def _load_pending_tasks(self):
         """从数据库加载状态为排队中或处理中（status = 0 或 1）的任务."""
         pending_tasks = ImageToVideoTask.select().where(
@@ -35,6 +36,7 @@ class ImageToVideoTaskTaskQueue:
         for task in pending_tasks:
             self.queue.put(task.__data__)
 
+    @with_db_connection
     def add_task(self, data: ImageToVideoTaskModel):
         """添加新任务到队列和数据库."""
         if self.queue.full():
@@ -52,6 +54,7 @@ class ImageToVideoTaskTaskQueue:
         logger.debug(f"添加任务 {new_task.task_id} 成功")
         return data.task_id
 
+    @with_db_connection
     def get_task(self):
         """从队列中获取一个任务."""
         task = self.queue.get()
@@ -64,6 +67,7 @@ class ImageToVideoTaskTaskQueue:
         logger.debug(f"获取任务 {task_id} 成功")
         return task
 
+    @with_db_connection
     def mark_task_as_done(self, task_id: int, result: ImageToVideoResultModel):
         """标记任务为完成并更新数据库中的状态, 同时将结果保存到结果表."""
         if result.result_id is None:
@@ -76,12 +80,14 @@ class ImageToVideoTaskTaskQueue:
                 ImageToVideoTask.task_id == task_id).execute()
         logger.info(f"任务 {task_id} 处理完成")
 
+    @with_db_connection
     def mark_task_as_failed(self, task_id: int, failed_reason: str):
         """标记任务为失败并更新数据库中的状态."""
         ImageToVideoTask.update(status=TaskStatus.FAILED.value, failed_reason=failed_reason).where(
             ImageToVideoTask.task_id == task_id).execute()
         logger.error(f"任务 {task_id} 处理失败")
 
+    @with_db_connection
     def get_result(self, task_id: int):
         """获取任务结果."""
         try:
@@ -107,6 +113,7 @@ class VideoAndAudioToVideoTaskTaskQueue:
         # 启动时加载未完成的任务到队列中
         self._load_pending_tasks()
 
+    @with_db_connection
     def _load_pending_tasks(self):
         """从数据库加载状态为排队中或处理中（status = 0 或 1）的任务."""
         pending_tasks = VideoAndAudioToVideoTask.select().where(
@@ -118,6 +125,7 @@ class VideoAndAudioToVideoTaskTaskQueue:
         for task in pending_tasks:
             self.queue.put(task.__data__)
 
+    @with_db_connection
     def add_task(self, data: VideoAndAudioToVideoTaskModel):
         """添加新任务到队列和数据库."""
         if self.queue.full():
@@ -135,6 +143,7 @@ class VideoAndAudioToVideoTaskTaskQueue:
         logger.debug(f"添加任务 {new_task.task_id} 成功")
         return data.task_id
 
+    @with_db_connection
     def get_task(self):
         """从队列中获取一个任务."""
         task = self.queue.get()
@@ -147,6 +156,7 @@ class VideoAndAudioToVideoTaskTaskQueue:
         logger.debug(f"获取任务 {task_id} 成功")
         return task
 
+    @with_db_connection
     def mark_task_as_done(self, task_id: int, result: VideoAndAudioToVideoResultModel):
         """标记任务为完成并更新数据库中的状态, 同时将结果保存到结果表."""
         if result.result_id is None:
@@ -159,6 +169,7 @@ class VideoAndAudioToVideoTaskTaskQueue:
                 VideoAndAudioToVideoTask.task_id == task_id).execute()
         logger.info(f"任务 {task_id} 处理完成")
 
+    @with_db_connection
     def mark_task_as_failed(self, task_id: int, failed_reason: str):
         """标记任务为失败并更新数据库中的状态."""
         result_id = self.Snowflake.generate()
@@ -168,6 +179,7 @@ class VideoAndAudioToVideoTaskTaskQueue:
             VideoAndAudioToVideoResult.create(result_id=result_id, failed_reason=failed_reason)
         logger.error(f"任务 {task_id} 处理失败")
 
+    @with_db_connection
     def get_result(self, task_id: int):
         """获取任务结果."""
         try:

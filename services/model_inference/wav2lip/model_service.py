@@ -49,6 +49,7 @@ class VideoAndAudioToVideoService:
         task_id = task.get("task_id")
         video_key = task.get("video_key")
         audio_key = task.get("audio_key")
+        improve_video = task.get("improve_video")
 
         # 下载视频到临时文件
         # todo 支持更多格式文件
@@ -61,8 +62,9 @@ class VideoAndAudioToVideoService:
         self.OSSAudioService.download_audio_to_file(audio_key, audio_file_path)
         logger.debug(f"任务 {task_id} 音频下载完成, 地址: {audio_file_path}")
         result = self.face_handle.handle(Wav2LipInputModel.parse_obj({
-            "face_path": video_file_path,
-            "audio_path": audio_file_path
+            "video_path": video_file_path,
+            "audio_path": audio_file_path,
+            "improve_video":improve_video
         }))
         # 上传到 OSS
         result_object_key = str(task_id) + ".mp4"

@@ -14,12 +14,13 @@ app = FastAPI()
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
-def lip_sync(video, audio):
+def lip_sync(video, audio, checkbox):
 
     # 开始对齐
-    result = video_with_audio_task_service.face_handle.handle(Wav2LipInputModel.parse_obj({
-        "face_path": video,
-        "audio_path": audio
+    result = video_with_audio_task_service.face_handle.handle(Wav2LipInputModel.model_validate({
+        "video_path": video,
+        "audio_path": audio,
+        "improve_video": checkbox
     }))
 
     result_vidio_path = os.path.join(current_dir, "result.mp4")
@@ -41,12 +42,14 @@ def create_gradio_interface():
             with gr.Column():
                 video_input = gr.Video(label="上传视频")
                 audio_input = gr.Audio(label="上传音频", type="filepath")
+                # 是否提高视频质量
+                checkbox = gr.Checkbox(label="提高视频质量")
                 sync_button = gr.Button("生成")
 
             with gr.Column():
                 video_output = gr.Video(label="结果")
 
-        sync_button.click(fn=lip_sync, inputs=[video_input, audio_input], outputs=video_output)
+        sync_button.click(fn=lip_sync, inputs=[video_input, audio_input, checkbox], outputs=video_output)
 
     return demo
 

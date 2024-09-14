@@ -33,6 +33,7 @@ async def verify_token_in_cookie(request: Request):
 class VideoWithAudioRequest(BaseModel):
     video_key: str
     audio_key: str
+    improve_video: Optional[bool] = False
     callback_url: Optional[str] = None
 
 
@@ -41,6 +42,7 @@ async def face_detection(request_body: VideoWithAudioRequest, payload: dict = De
     task_data = {
         "video_key": request_body.video_key,
         "audio_key": request_body.audio_key,
+        "improve_video":request_body.improve_video,
         "callback_url": request_body.callback_url,
         "status": 0
     }

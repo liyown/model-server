@@ -10,14 +10,15 @@ def retry_with_timeout(max_attempts, delay, timeout_seconds, fail_callback=None)
     def decorator(func):
         def wrapper(*args, **kwargs):
             attempt = 0
+            global e
             while attempt < max_attempts:
                 with ThreadPoolExecutor(max_workers=1) as executor:
                     future = executor.submit(func, *args, **kwargs)
                     try:
                         result = future.result(timeout=timeout_seconds)
                         return result
-                    except TimeoutError:
-                        logger.warning(f"Attempt {attempt + 1} timed out")
+                    except TimeoutError as e:
+                        logger.warning(f"Attempt {attempt + 1} timed out {e}")
                     except Exception as e:
                         logger.warning(f"Attempt {attempt + 1} failed: {e}")
                     finally:
@@ -27,8 +28,8 @@ def retry_with_timeout(max_attempts, delay, timeout_seconds, fail_callback=None)
                         else:
                             if fail_callback:
                                 fail_callback()
-                            logger.error(f"Operation failed after {max_attempts} attempts")
-                            raise Exception(f"Operation failed after {max_attempts} attempts")
+                            logger.error(f"Operation failed after {max_attempts} attempts, {e}")
+                            raise Exception(f"Operation failed after {max_attempts} attempts, {e}")
 
         return wrapper
 

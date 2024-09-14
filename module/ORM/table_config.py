@@ -1,5 +1,5 @@
 from peewee import Model, CharField, DateTimeField, IntegerField, TextField, MySQLDatabase, SQL, BigIntegerField, \
-    AutoField
+    AutoField, BooleanField
 from datetime import datetime
 
 from module.ORM.mysql_config import db
@@ -47,6 +47,7 @@ class VideoAndAudioToVideoTask(Model):
     # 可变字符串字段，最大长度为255
     video_key = CharField(max_length=255)  # 图片链接
     audio_key = CharField(max_length=255)  # 音频链接
+    improve_video = BooleanField(default=False)  # 是否提升视频质量
     callback_url = CharField(max_length=255, null=True)  # 回调地址
     result_id = BigIntegerField(null=True)  # 生成视频结果ID
     created_at = DateTimeField(default=datetime.now)  # 创建时间
